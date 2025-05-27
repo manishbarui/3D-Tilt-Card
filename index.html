@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced 3D Card Tilt Animation</title>
+    <style>
+        :root {
+            --max-tilt: 30deg; /* Increased for more pronounced tilt */
+            --perspective: 800px; /* Tighter perspective for deeper 3D */
+            --card-width: 320px;
+            --card-height: 420px;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96c93d);
+            background-size: 400%;
+            animation: colorShift 8s ease infinite; /* Faster gradient shift */
+            font-family: Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        @keyframes colorShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .card {
+            width: var(--card-width);
+            height: var(--card-height);
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.15s ease-out; /* Smoother transition */
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            will-change: transform;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at var(--shine-x, 50%) var(--shine-y, 50%), rgba(255, 255, 255, 0.4), transparent 70%);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+
+        .card.active::before {
+            opacity: 0.6; /* Shine visible when card is active */
+        }
+
+        .card-content {
+            padding: 20px;
+            color: white;
+            text-align: center;
+            transform: translateZ(40px); /* Increased for more 3D depth */
+            user-select: none;
+        }
+
+        h1 {
+            font-size: 26px;
+            margin: 0;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        p {
+            font-size: 16px;
+            margin-top: 12px;
+        }
+
+        @media (max-width: 600px) {
+            .card {
+                width: 85%;
+                height: 360px;
+            }
+        }
+
+        /* Fallback animation for devices without motion support */
+        @keyframes subtleWobble {
+            0% { transform: perspective(800px) rotateX(2deg) rotateY(-2deg); }
+            50% { transform: perspective(800px) rotateX(-2deg) rotateY(2deg); }
+            100% { transform: perspective(800px) rotateX(2deg) rotateY(-2deg); }
+        }
+
+        .card.fallback {
+            animation: subtleWobble 4s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="card" id="card">
+        <div class="card-content">
+            <h1>3D Tilt Card</h1>
+            <p>Move cursor or tilt device for 3D effect! <h1>🤡</h1></p>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const card = document.getElementById('card');
+            const maxTilt = 30; // Matches --max-tilt
+            let animationFrameId = null;
+            let isMotionSupported = false;
+
+            // Check for device orientation support
+            if (window.DeviceOrientationEvent) {
+                // Request permission for iOS 13+ devices
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(permissionState => {
+                            if (permissionState === 'granted') {
+                                isMotionSupported = true;
+                            } else {
+                                card.classList.add('fallback');
+                            }
+                        })
+                        .catch(() => card.classList.add('fallback'));
+                } else {
+                    isMotionSupported = true;
+                }
+            } else {
+                card.classList.add('fallback');
+            }
+
+            // Apply transform with perspective
+            function applyTransform(rotateX, rotateY, shineX = 50, shineY = 50) {
+                card.style.transform = `perspective(var(--perspective)) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+                card.style.setProperty('--shine-x', `${shineX}%`);
+                card.style.setProperty('--shine-y', `${shineY}%`);
+                card.classList.add('active');
+            }
+
+            // Desktop: Mouse movement
+            function handleMouseMove(event) {
+                if (window.innerWidth <= 600) return;
+
+                if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+                animationFrameId = requestAnimationFrame(() => {
+                    const rect = card.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+
+                    const mouseX = event.clientX - centerX;
+                    const mouseY = event.clientY - centerY;
+
+                    const rotateX = (-mouseY / (rect.height / 2)) * maxTilt;
+                    const rotateY = (mouseX / (rect.width / 2)) * maxTilt;
+
+                    // Calculate shine position based on mouse
+                    const shineX = (mouseX / rect.width + 0.5) * 100;
+                    const shineY = (mouseY / rect.height + 0.5) * 100;
+
+                    applyTransform(rotateX, rotateY, shineX, shineY);
+                });
+            }
+
+            // Mobile: Device orientation
+            function handleDeviceOrientation(event) {
+                if (window.innerWidth > 600 || !isMotionSupported) return;
+
+                const beta = event.beta || 0; // Front-to-back tilt
+                const gamma = event.gamma || 0; // Left-to-right tilt
+
+                const rotateX = Math.max(-maxTilt, Math.min(maxTilt, beta * 0.6));
+                const rotateY = Math.max(-maxTilt, Math.min(maxTilt, gamma * 0.6));
+
+                // Calculate shine position based on tilt
+                const shineX = (gamma / 90 + 0.5) * 100;
+                const shineY = (beta / 180 + 0.5) * 100;
+
+                applyTransform(-rotateX, rotateY, shineX, shineY);
+            }
+
+            // Reset transform
+            function resetTransform() {
+                card.style.transform = 'perspective(var(--perspective)) rotateX(0deg) rotateY(0deg)';
+                card.classList.remove('active');
+            }
+
+            // Event listeners
+            document.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('deviceorientation', handleDeviceOrientation);
+            card.addEventListener('mouseleave', resetTransform);
+        })();
+    </script>
+</body>
+</html> 
